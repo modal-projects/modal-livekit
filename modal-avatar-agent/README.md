@@ -67,13 +67,13 @@ modal secret create livekit-agent \
 ### 2. Deploy the Avatar Dispatcher
 
 ```bash
-modal deploy dispatcher.py
+modal deploy -m modal-avatar-agent.dispatcher
 ```
 
 ### 3. Deploy the Agent Pool
 
 ```bash
-modal deploy agent_pool.py
+python -m examples.avatar_agents.audio_wave.modal.agent_pool deploy
 ```
 
 This deploys the pool manager and starts the scheduled maintenance function,
@@ -84,17 +84,17 @@ which will create the initial set of warm sandboxes.
 To immediately populate the pool without waiting for the first scheduled run:
 
 ```bash
-python agent_pool.py maintain
+python -m examples.avatar_agents.audio_wave.modal.agent_pool maintain
 ```
 
 ## Pool Management
 
 ```bash
 # Check current pool status
-python agent_pool.py check
+python -m examples.avatar_agents.audio_wave.modal.agent_pool check
 
 # Manually trigger maintenance (cleanup + replenish)
-python agent_pool.py maintain
+python -m examples.avatar_agents.audio_wave.modal.agent_pool maintain
 ```
 
 ## Configuration
