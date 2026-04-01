@@ -38,7 +38,8 @@ The system has three components that run on Modal:
 
 - **Agent Pool** (`agent_pool.py`): Manages a pool of warm Sandboxes, each running an
   agent worker. Replenishment happens two ways: immediately (via HTTP POST from the agent
-  worker when it takes a job) and on a schedule (safety net cleanup every minute).
+  worker when it takes a job) and on a schedule (safety net cleanup every minute). [Based on
+  our Sandbox warm pool example](https://modal.com/docs/examples/sandbox_pool).
 
 - **Avatar Runner** (`avatar_runner.py`): Connects to a LiveKit room, generates audio-wave
   video frames synced to TTS output, and publishes them. Uses `wave_viz.py` for waveform
