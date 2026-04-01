@@ -53,6 +53,8 @@ The system has three components that run on Modal:
 
 ## Setup
 
+All commands should be executed from the parent directory of this repo.
+
 ### 0. Sync the environment with `uv`
 
 ```bash
