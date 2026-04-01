@@ -24,6 +24,10 @@ logging.basicConfig(level=logging.INFO)
 
 THIS_DIR = Path(__file__).parent.absolute()
 
+class LaunchRequest(BaseModel):
+    room_name: str
+    url: str
+    token: str
 
 @app.cls(
     image=image,
@@ -34,12 +38,15 @@ THIS_DIR = Path(__file__).parent.absolute()
     min_containers=3,
     buffer_containers=3,
     region="us-west",
+    experimental_options = {
+        "input_plane_region": "us-west",
+    }
 )
 class AvatarDispatcher:
 
     @modal.method()
-    async def launch(self, room_name: str, url: str, token: str) -> None:
-        """Launch an avatar worker subprocess and block until it completes."""
+    async def run(self, room_name: str, url: str, token: str) -> None:
+        """Run an avatar worker subprocess and block until it completes."""
         cmd = [sys.executable, str(THIS_DIR / "avatar_runner.py")]
         env = os.environ.copy()
         env["LIVEKIT_URL"] = url
@@ -57,21 +64,12 @@ class AvatarDispatcher:
             logger.exception(f"Avatar worker for room {room_name} failed")
             raise
 
-
-class LaunchRequest(BaseModel):
-    room_name: str
-    url: str
-    token: str
-
-
-@app.function(
-    image=image,
-    region="us-east",
-    min_containers=1
-)
-@modal.concurrent(max_inputs=1000)
-@modal.fastapi_endpoint(method="POST")
-async def launch_avatar(req: LaunchRequest):
-    """HTTP endpoint that spawns an avatar worker and returns immediately."""
-    await AvatarDispatcher().launch.spawn.aio(room_name=req.room_name, url=req.url, token=req.token)
-    return {"status": "launched", "room_name": req.room_name}
+    @modal.fastapi_endpoint(method="POST")
+    async def launch_avatar_api(self, req: LaunchRequest):
+        """HTTP endpoint that spawns an avatar worker and returns immediately."""
+        try:
+            await self.run.local(room_name=req.room_name, url=req.url, token=req.token)
+            return {"status": "done", "room_name": req.room_name}
+        except Exception:
+            logger.exception(f"Avatar worker for room {req.room_name} failed")
+            raise

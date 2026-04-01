@@ -84,6 +84,11 @@ def add_sandbox_to_queue() -> None:
         "avatar-agent-pool-sandboxes", create_if_missing=True
     )
 
+    avatar_launcher = modal.Cls.from_name("avatar-dispatcher", "AvatarDispatcher")()
+    AVATAR_DISPATCHER_URL = avatar_launcher.launch_avatar_api.get_web_url() 
+    POOL_REPLENISH_URL = replenish.get_web_url() 
+
+
     sb = modal.Sandbox.create(
         "python", "agent_worker.py", "start",
         app=sandbox_app,
@@ -92,6 +97,7 @@ def add_sandbox_to_queue() -> None:
         secrets=[modal.Secret.from_name("livekit-agent")],
         timeout=SANDBOX_TIMEOUT_SECONDS,
         region="us-west",
+        env={"AVATAR_DISPATCHER_URL": AVATAR_DISPATCHER_URL, "POOL_REPLENISH_URL": POOL_REPLENISH_URL},
     )
     expires_at = int(time.time()) + SANDBOX_TIMEOUT_SECONDS
 

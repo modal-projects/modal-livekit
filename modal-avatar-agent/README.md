@@ -53,6 +53,12 @@ The system has three components that run on Modal:
 
 ## Setup
 
+### 0. Sync the environment with `uv`
+
+```bash
+uv sync
+```
+
 ### 1. Create the Modal secret
 
 Store your LiveKit and OpenAI credentials as a Modal secret:
@@ -74,7 +80,7 @@ modal deploy -m modal-avatar-agent.dispatcher
 ### 3. Deploy the Agent Pool
 
 ```bash
-python -m examples.avatar_agents.audio_wave.modal.agent_pool deploy
+python -m modal-avatar-agent.agent_pool deploy
 ```
 
 This deploys the pool manager and starts the scheduled maintenance function,
@@ -85,17 +91,17 @@ which will create the initial set of warm sandboxes.
 To immediately populate the pool without waiting for the first scheduled run:
 
 ```bash
-python -m examples.avatar_agents.audio_wave.modal.agent_pool maintain
+python -m modal-avatar-agent.agent_pool maintain
 ```
 
 ## Pool Management
 
 ```bash
 # Check current pool status
-python -m examples.avatar_agents.audio_wave.modal.agent_pool check
+python -m modal-avatar-agent.modal.agent_pool check
 
 # Manually trigger maintenance (cleanup + replenish)
-python -m examples.avatar_agents.audio_wave.modal.agent_pool maintain
+python -m modal-avatar-agent.agent_pool maintain
 ```
 
 ## Configuration

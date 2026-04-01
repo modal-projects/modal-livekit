@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import httpx
+import os
 
 from livekit import api, rtc
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, cli
@@ -9,18 +10,14 @@ from livekit.agents.voice.io import PlaybackFinishedEvent
 from livekit.agents.voice.room_io import ATTRIBUTE_PUBLISH_ON_BEHALF
 from livekit.plugins import openai
 
-import modal
-from .agent_pool import pool_replenisher
-
 logger = logging.getLogger("avatar-example")
 logger.setLevel(logging.INFO)
 
 server = AgentServer()
 AVATAR_IDENTITY = "avatar_worker"
 
-avatar_launcher = modal.Function.from_name("avatar-dispatcher", "launch")
-AVATAR_DISPATCHER_URL = avatar_launcher.get_web_url() #"https://modal-labs-shababo-dev--avatar-dispatcher-launch-avatar.modal.run"
-POOL_REPLENISH_URL = pool_replenisher.get_web_url() #"https://modal-labs-shababo-dev--avatar-agent-pool-replenish.modal.run"
+POOL_REPLENISH_URL = os.environ.get("POOL_REPLENISH_URL")
+AVATAR_DISPATCHER_URL = os.environ.get("AVATAR_DISPATCHER_URL")
 
 async def launch_avatar(ctx: JobContext, avatar_identity: str) -> None:
     """Send HTTP request to the avatar dispatcher to launch an avatar worker."""
@@ -35,16 +32,17 @@ async def launch_avatar(ctx: JobContext, avatar_identity: str) -> None:
     )
 
     logger.info("Sending launch request to avatar dispatcher")
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=None) as client:
         response = await client.post(
             AVATAR_DISPATCHER_URL,
             json={"room_name": ctx.room.name, "url": ctx._info.url, "token": token},
         )
         response.raise_for_status()
-    logger.info("Avatar launch request sent")
+    logger.info("Avatar worker finished")
 
 
 async def entrypoint(ctx: JobContext):
+    
     if POOL_REPLENISH_URL:
         async def replenish():
             try:
@@ -63,7 +61,7 @@ async def entrypoint(ctx: JobContext):
         resume_false_interruption=False,
     )
 
-    await launch_avatar(ctx, AVATAR_IDENTITY)
+    asyncio.create_task(launch_avatar(ctx, AVATAR_IDENTITY))
     session.output.audio = DataStreamAudioOutput(
         ctx.room,
         destination_identity=AVATAR_IDENTITY,
