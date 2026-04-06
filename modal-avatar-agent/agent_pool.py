@@ -14,7 +14,7 @@ from pathlib import Path
 
 import modal
 
-from shared.agent_pool import PoolConfig, create_pool_app
+from shared.sandbox_pool import PoolConfig, create_pool_app
 
 THIS_DIR = Path(__file__).parent.absolute()
 
