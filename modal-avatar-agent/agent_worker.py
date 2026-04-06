@@ -1,8 +1,8 @@
-import logging
 import asyncio
-import httpx
+import logging
 import os
 
+import httpx
 from livekit import api, rtc
 from livekit.agents import Agent, AgentServer, AgentSession, JobContext, cli
 from livekit.agents.voice.avatar import DataStreamAudioOutput
@@ -16,8 +16,12 @@ logger.setLevel(logging.INFO)
 server = AgentServer()
 AVATAR_IDENTITY = "avatar_worker"
 
+SANDBOX_ID = os.environ.get("SANDBOX_ID")
 POOL_REPLENISH_URL = os.environ.get("POOL_REPLENISH_URL")
+POOL_ACTIVATE_URL = os.environ.get("POOL_ACTIVATE_URL")
+POOL_DEACTIVATE_URL = os.environ.get("POOL_DEACTIVATE_URL")
 AVATAR_DISPATCHER_URL = os.environ.get("AVATAR_DISPATCHER_URL")
+
 
 async def launch_avatar(ctx: JobContext, avatar_identity: str) -> None:
     """Send HTTP request to the avatar dispatcher to launch an avatar worker."""
@@ -42,8 +46,29 @@ async def launch_avatar(ctx: JobContext, avatar_identity: str) -> None:
 
 
 async def entrypoint(ctx: JobContext):
-    
+    if POOL_ACTIVATE_URL and SANDBOX_ID:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(POOL_ACTIVATE_URL, params={"sandbox_id": SANDBOX_ID})
+                logger.info("Sandbox activated")
+        except Exception:
+            logger.warning("Failed to activate sandbox", exc_info=True)
+
+    async def on_shutdown():
+        if POOL_DEACTIVATE_URL and SANDBOX_ID:
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        POOL_DEACTIVATE_URL, params={"sandbox_id": SANDBOX_ID}
+                    )
+                    logger.info("Sandbox deactivated")
+            except Exception:
+                logger.warning("Failed to deactivate sandbox", exc_info=True)
+
+    ctx.add_shutdown_callback(on_shutdown)
+
     if POOL_REPLENISH_URL:
+
         async def replenish():
             try:
                 async with httpx.AsyncClient() as client:
@@ -51,6 +76,7 @@ async def entrypoint(ctx: JobContext):
                     logger.info("Pool replenishment triggered")
             except Exception:
                 logger.warning("Failed to trigger pool replenishment", exc_info=True)
+
         asyncio.create_task(replenish())
 
     await ctx.connect()
