@@ -6,7 +6,7 @@ video to a room, deployed on Modal.
 ## Deploy
 
 ```bash
-python modal-browser-agent/agent_pool.py deploy
+python -m modal-browser-agent.agent_pool deploy
 ```
 
 This deploys the pool manager and creates the initial set of warm sandboxes.

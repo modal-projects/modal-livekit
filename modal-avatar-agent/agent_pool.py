@@ -1,15 +1,15 @@
 """
 Sandbox pool for the avatar agent.
 
-Maintains warm agent workers connected to LiveKit, each capable of
-launching an avatar via the dispatcher when a job is assigned.
-
 Usage:
     python -m modal-avatar-agent.agent_pool deploy
     python -m modal-avatar-agent.agent_pool check
     python -m modal-avatar-agent.agent_pool maintain
 """
 
+import asyncio
+import time
+import uuid
 from pathlib import Path
 
 import modal
@@ -26,6 +26,15 @@ sandbox_image = (
     .add_local_dir(str(THIS_DIR), remote_path="/app")
 )
 
+shared_image = modal.Image.debian_slim(python_version="3.13").add_local_python_source("shared")
+
+config = PoolConfig(
+    app_name="avatar-agent-pool",
+    sandbox_image=sandbox_image,
+)
+
+app, run_cli, pool_queue, pool_state = create_pool_app(config)
+
 
 def get_extra_sandbox_env() -> dict[str, str]:
     """Look up the avatar dispatcher URL at sandbox creation time."""
@@ -33,12 +42,45 @@ def get_extra_sandbox_env() -> dict[str, str]:
     return {"AVATAR_DISPATCHER_URL": dispatcher.launch_avatar_api.get_web_url()}
 
 
-config = PoolConfig(
-    app_name="avatar-agent-pool",
-    sandbox_image=sandbox_image,
-)
+@app.function(image=shared_image, retries=3, region="us-east", min_containers=1)
+@modal.concurrent(max_inputs=20)
+async def add_sandbox_to_queue() -> None:
+    sandbox_app = modal.App.lookup(
+        f"{config.app_name}-sandboxes", create_if_missing=True
+    )
 
-app, run_cli = create_pool_app(config, sandbox_env_setup=get_extra_sandbox_env)
+    sandbox_key = str(uuid.uuid4())
+
+    env = {
+        "SANDBOX_ID": sandbox_key,
+        "POOL_REPLENISH_URL": await modal.Function.from_name(config.app_name, "replenish").get_web_url.aio(),
+        "POOL_ACTIVATE_URL": await modal.Function.from_name(config.app_name, "activate").get_web_url.aio(),
+        "POOL_DEACTIVATE_URL": await modal.Function.from_name(config.app_name, "deactivate").get_web_url.aio(),
+    }
+    env.update(get_extra_sandbox_env())
+
+    sb = await modal.Sandbox.create.aio(
+        *config.sandbox_command,
+        app=sandbox_app,
+        image=sandbox_image,
+        workdir=config.sandbox_workdir,
+        secrets=config.sandbox_secrets,
+        timeout=config.sandbox_timeout_seconds,
+        region=config.sandbox_region,
+        env=env,
+    )
+
+    await asyncio.sleep(5)
+    if sb.poll() is not None:
+        raise Exception("Agent worker sandbox failed to start")
+
+    expires_at = int(time.time()) + config.sandbox_timeout_seconds
+    await pool_state.put.aio(sandbox_key, 0)
+    await pool_queue.put.aio(
+        {"key": sandbox_key, "modal_id": sb.object_id, "expires_at": expires_at}
+    )
+    sb.detach()
+
 
 if __name__ == "__main__":
     run_cli()

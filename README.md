@@ -18,20 +18,20 @@ ready for instant dispatch. The pool infrastructure lives in
 
 ```
 ┌──────────────────┐
-│  LiveKit Server   │
-│                    │
-│  Dispatches jobs   │
-│  to idle agents    │
-└────────┬───────────┘
+│  LiveKit Server  │
+│                  │
+│  Dispatches jobs │
+│  to idle agents  │
+└────────┬─────────┘
          │ WebSocket
          ▼
 ┌──────────────────┐       HTTP POST        ┌──────────────────┐
-│  Sandbox (idle)   │ ────────────────────▶ │  Pool Manager     │
-│  Sandbox (idle)   │  "activate" /          │                    │
-│  Sandbox (active) │  "deactivate" /        │  Tracks state,     │
-│  ...              │  "replenish"           │  creates/removes   │
-└──────────────────┘                         │  sandboxes         │
-                                              └──────────────────┘
+│  Sandbox (idle)  │ ─────────────────────▶ │  Pool Manager    │
+│  Sandbox (idle)  │  "activate" /          │                  │
+│  Sandbox (active)│  "deactivate" /        │  Tracks state,   │
+│  ...             │  "replenish"           │  creates/removes │
+│                  │                        │  sandboxes       │
+└──────────────────┘                        └──────────────────┘
 ```
 
 **Lifecycle:**
@@ -89,13 +89,13 @@ Every example uses the same CLI for pool management:
 
 ```bash
 # Deploy the pool and create initial sandboxes
-python <example>/agent_pool.py deploy
+python -m <example>.agent_pool deploy
 
 # Check pool status (idle/active/dead, time remaining)
-python <example>/agent_pool.py check
+python -m <example>.agent_pool check
 
 # Manually trigger maintenance
-python <example>/agent_pool.py maintain
+python -m <example>.agent_pool.py maintain
 ```
 
 ## Configuration

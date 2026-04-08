@@ -4,12 +4,7 @@ import os
 
 import httpx
 from livekit.agents import AgentServer, AutoSubscribe, JobContext, cli
-from livekit.plugins.browser import (
-    AudioData,
-    BrowserContext,
-    BrowserSession,
-    PaintData,
-)
+from livekit.plugins.browser import BrowserContext, BrowserSession
 
 logger = logging.getLogger("browser-agent")
 logger.setLevel(logging.INFO)
@@ -66,21 +61,6 @@ async def entrypoint(ctx: JobContext) -> None:
         height=720,
         framerate=30,
     )
-
-    @page.on("paint")
-    def on_paint(data: PaintData):
-        pass
-
-    @page.on("audio")
-    def on_audio(data: AudioData):
-        pass
-
-    async with browser_ctx.playwright() as browser:
-        pages = browser.contexts[0].pages
-        if pages:
-            pw_page = pages[0]
-            title = await pw_page.title()
-            logger.info("page title: %s", title)
 
     await ctx.connect(auto_subscribe=AutoSubscribe.SUBSCRIBE_NONE)
 

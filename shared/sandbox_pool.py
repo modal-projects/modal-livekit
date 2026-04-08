@@ -21,13 +21,15 @@ Replenishment works two ways:
 Adapted from https://modal.com/docs/examples/sandbox_pool
 
 Usage:
-    from shared.agent_pool import create_pool_app, PoolConfig
+    from shared.sandbox_pool import create_pool_app, PoolConfig
 
     config = PoolConfig(
         app_name="my-agent-pool",
         sandbox_image=my_image,
     )
-    app, run_cli = create_pool_app(config)
+    app, run_cli, pool_queue, pool_state = create_pool_app(config)
+
+    # Define add_sandbox_to_queue at module level (see examples)
 
     if __name__ == "__main__":
         run_cli()
@@ -36,7 +38,6 @@ Usage:
 import argparse
 import asyncio
 import time
-import uuid
 from typing import Callable
 
 import modal
@@ -49,7 +50,10 @@ class PoolConfig:
     app_name: str
     sandbox_image: modal.Image
     sandbox_command: list[str] = field(
-        default_factory=lambda: ["python", "agent_worker.py", "start"]
+        default_factory=lambda: [
+            "bash", "-c",
+            "python agent_worker.py download-files && python agent_worker.py start",
+        ]
     )
     sandbox_secrets: list = field(
         default_factory=lambda: [modal.Secret.from_name("livekit-agent")]
@@ -64,95 +68,46 @@ class PoolConfig:
 
 def create_pool_app(
     config: PoolConfig,
-    sandbox_env_setup: Callable[[], dict[str, str]] | None = None,
-) -> tuple[modal.App, Callable]:
+) -> tuple[modal.App, Callable, modal.Queue, modal.Dict]:
     """
-    Build a complete sandbox pool app from configuration.
+    Build a sandbox pool app from configuration.
 
-    Args:
-        config: Pool configuration.
-        sandbox_env_setup: Optional callable returning extra env vars
-            for sandboxes (e.g., dispatcher URLs). Called at sandbox
-            creation time inside ``add_sandbox_to_queue``.
+    This creates the app with all shared infrastructure (endpoints,
+    maintenance, CLI) but does NOT define ``add_sandbox_to_queue`` —
+    that function must be defined at module level in each example's
+    ``agent_pool.py`` because it references a ``modal.Image`` which
+    cannot be captured in a serialized closure.
 
     Returns:
-        ``(app, run_cli)`` — the Modal app and a CLI entrypoint function.
+        ``(app, run_cli, pool_queue, pool_state)``
     """
     app = modal.App(config.app_name)
 
     pool_queue = modal.Queue.from_name(
         f"{config.app_name}-queue", create_if_missing=True
-    )
+    ).hydrate()
     pool_state = modal.Dict.from_name(
         f"{config.app_name}-state", create_if_missing=True
-    )
+    ).hydrate()
 
     fastapi_image = modal.Image.debian_slim(python_version="3.13").uv_pip_install(
         "fastapi[standard]",
     )
 
     app_name = config.app_name
-    sandbox_image = config.sandbox_image
-    sandbox_command = config.sandbox_command
-    sandbox_secrets = config.sandbox_secrets
-    sandbox_timeout = config.sandbox_timeout_seconds
     min_remaining = config.min_remaining_seconds
-    sandbox_region = config.sandbox_region
-    sandbox_workdir = config.sandbox_workdir
     pool_size = config.pool_size
-
-    # -- Sandbox creation --
-
-    @app.function(retries=3, region="us-east", min_containers=1)
-    @modal.concurrent(max_inputs=20)
-    async def add_sandbox_to_queue() -> None:
-        sandbox_app = modal.App.lookup(
-            f"{app_name}-sandboxes", create_if_missing=True
-        )
-
-        sandbox_key = str(uuid.uuid4())
-
-        env = {
-            "SANDBOX_ID": sandbox_key,
-            "POOL_REPLENISH_URL": replenish.get_web_url(),
-            "POOL_ACTIVATE_URL": activate.get_web_url(),
-            "POOL_DEACTIVATE_URL": deactivate.get_web_url(),
-        }
-        if sandbox_env_setup:
-            env.update(sandbox_env_setup())
-
-        sb = modal.Sandbox.create(
-            *sandbox_command,
-            app=sandbox_app,
-            image=sandbox_image,
-            workdir=sandbox_workdir,
-            secrets=sandbox_secrets,
-            timeout=sandbox_timeout,
-            region=sandbox_region,
-            env=env,
-        )
-
-        await asyncio.sleep(5)
-        if sb.poll() is not None:
-            raise Exception("Agent worker sandbox failed to start")
-
-        expires_at = int(time.time()) + sandbox_timeout
-        await pool_state.put.aio(sandbox_key, 0)
-        await pool_queue.put.aio(
-            {"key": sandbox_key, "modal_id": sb.object_id, "expires_at": expires_at}
-        )
-        sb.detach()
 
     # -- HTTP endpoints --
 
-    @app.function(image=fastapi_image, region="us-east")
+    @app.function(name="replenish", serialized=True, image=fastapi_image, region="us-east")
     @modal.concurrent(max_inputs=1000)
     @modal.fastapi_endpoint(method="POST")
     async def replenish():
-        add_sandbox_to_queue.spawn()
+        modal.Function.from_name(app_name, "add_sandbox_to_queue").spawn()
         return {"status": "replenishing"}
 
-    @app.function(image=fastapi_image, region="us-east")
+    @app.function(name="activate", serialized=True, image=fastapi_image, region="us-east")
     @modal.concurrent(max_inputs=1000)
     @modal.fastapi_endpoint(method="POST")
     async def activate(sandbox_id: str):
@@ -162,7 +117,7 @@ def create_pool_app(
         await pool_state.put.aio(sandbox_id, current + 1)
         return {"active_calls": current + 1}
 
-    @app.function(image=fastapi_image, region="us-east")
+    @app.function(name="deactivate", serialized=True, image=fastapi_image, region="us-east")
     @modal.concurrent(max_inputs=1000)
     @modal.fastapi_endpoint(method="POST")
     async def deactivate(sandbox_id: str):
@@ -175,7 +130,7 @@ def create_pool_app(
 
     # -- Maintenance --
 
-    @app.function()
+    @app.function(name="terminate_sandboxes", serialized=True)
     async def terminate_sandboxes(entries: list[dict]) -> int:
         num_terminated = 0
         for entry in entries:
@@ -194,7 +149,9 @@ def create_pool_app(
         return num_terminated
 
     @app.function(
-        schedule=modal.Period(minutes=config.maintenance_interval_minutes)
+        name="maintain_pool",
+        serialized=True,
+        schedule=modal.Period(minutes=config.maintenance_interval_minutes),
     )
     async def maintain_pool():
         now = time.time()
@@ -258,7 +215,8 @@ def create_pool_app(
                 f"Pool: {len(keep_idle)} idle, {len(active_entries)} active "
                 f"— adding {needed} to reach target {pool_size} idle"
             )
-            for _ in add_sandbox_to_queue.starmap(() for _ in range(needed)):
+            add_fn = modal.Function.from_name(app_name, "add_sandbox_to_queue")
+            async for _ in add_fn.starmap.aio(() for _ in range(needed)):
                 pass
 
         print(
@@ -271,7 +229,7 @@ def create_pool_app(
 
     async def deploy():
         print(f"Deploying {app_name}...")
-        app.deploy()
+        await app.deploy.aio()
         print("Done.")
         print("\nRunning initial pool maintenance...")
         await maintain_pool.remote.aio()
@@ -340,4 +298,4 @@ def create_pool_app(
         elif args.command == "maintain":
             asyncio.run(maintain_pool.remote.aio())
 
-    return app, run_cli
+    return app, run_cli, pool_queue, pool_state

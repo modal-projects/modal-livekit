@@ -11,13 +11,13 @@ This example has an additional component beyond the standard sandbox pool — th
 
 ```
 ┌─────────────────────┐       HTTP POST        ┌─────────────────────┐
-│   Agent Worker      │ ───────────────────────▶│  Avatar Dispatcher  │
-│   (Sandbox Pool)    │  "launch avatar for     │  (Modal Cls, GPU)   │
-│                     │   this room"            │                     │
-│  Voice agent with   │                         │  Runs avatar_       │
-│  OpenAI Realtime    │                         │  runner.py as       │
-│                     │                         │  subprocess          │
-└─────────────────────┘                         └─────────────────────┘
+│   Agent Worker      │ ──────────────────────▶│  Avatar Dispatcher  │
+│   (Sandbox Pool)    │  "launch avatar for    │  (Modal Cls, GPU)   │
+│                     │   this room"           │                     │
+│  Voice agent with   │                        │  Runs avatar_       │
+│  OpenAI Realtime    │                        │  runner.py as       │
+│                     │                        │  subprocess         │
+└─────────────────────┘                        └─────────────────────┘
 ```
 
 - **Agent Worker** (`agent_worker.py`): Runs inside sandboxes. When a job
@@ -39,10 +39,10 @@ The dispatcher must be deployed **before** the pool (the pool looks up its URL):
 
 ```bash
 # 1. Deploy the avatar dispatcher
-modal deploy modal-avatar-agent/dispatcher.py
+modal -m deploy modal-avatar-agent.dispatcher
 
 # 2. Deploy the agent pool
-python modal-avatar-agent/agent_pool.py deploy
+python -m modal-avatar-agent.agent_pool deploy
 ```
 
 ## What It Does

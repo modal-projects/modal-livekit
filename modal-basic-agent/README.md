@@ -6,7 +6,7 @@ as a starting point or for verifying the sandbox pool lifecycle.
 ## Deploy
 
 ```bash
-python modal-basic-agent/agent_pool.py deploy
+python -m modal-basic-agent.agent_pool deploy
 ```
 
 This deploys the pool manager and creates the initial set of warm sandboxes.
