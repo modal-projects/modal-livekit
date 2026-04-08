@@ -34,18 +34,29 @@ ready for instant dispatch. The pool infrastructure lives in
 └──────────────────┘                        └──────────────────┘
 ```
 
-**Lifecycle:**
+**Sandbox Lifecycle:**
 
-1. The pool maintains N idle sandboxes, each running an agent worker connected
+1. **Creation**: `add_sandbox_to_queue` creates a sandbox with a unique ID,
+   initializes its `active_calls` count to 0 in `pool_state`, and pushes it
+   onto `pool_queue`. The sandbox runs `download-files` then `start`, connecting
    to LiveKit via WebSocket.
-2. LiveKit assigns a job to an idle worker. The worker calls `activate` (marks
-   itself busy) and `replenish` (triggers creation of a replacement sandbox).
-3. When the job ends, the worker calls `deactivate`.
-4. Scheduled maintenance runs every minute: terminates dead sandboxes, replaces
-   expiring idle ones, and tops up the pool.
+2. **Dispatch**: LiveKit assigns a job to an idle worker. The worker POSTs to
+   `activate` (increments `active_calls`) and `replenish` (spawns a replacement
+   sandbox immediately).
+3. **Completion**: When the job ends, the worker POSTs to `deactivate`
+   (decrements `active_calls`).
+4. **Maintenance** (runs every minute): Drains the queue and categorizes each
+   sandbox:
+   - **Dead** (exited) → terminate and clean up
+   - **Active** (`active_calls > 0`) → put back in queue, never terminated
+   - **Idle fresh** (enough lifetime remaining) → keep up to `pool_size`
+   - **Idle expiring** (< 2h remaining) → terminate and replace
+5. **Replenishment**: Happens two ways — immediately when an agent takes a job,
+   and as a scheduled safety net via maintenance.
 
-Active sandboxes are never terminated by the pool — only dead or idle sandboxes
-are cleaned up.
+Active sandboxes are never terminated by the pool. Multiple concurrent jobs can
+run on the same sandbox (tracked via `active_calls`). Modal's sandbox timeout
+is set to 24h; idle sandboxes with < 2h remaining are proactively replaced.
 
 ## Prerequisites
 
