@@ -7,7 +7,6 @@ Examples of deploying [LiveKit Agents](https://docs.livekit.io/agents/) on [Moda
 | Example | Description |
 |---|---|
 | [`modal-basic-agent/`](modal-basic-agent/) | Minimal agent that connects to a room and logs. Good starting point. |
-| [`modal-browser-agent/`](modal-browser-agent/) | Captures a web page with Playwright and publishes it as video to a room. |
 | [`modal-avatar-agent/`](modal-avatar-agent/) | Voice agent (OpenAI Realtime) with an audio-wave avatar rendered on a GPU. |
 
 ## How It Works
@@ -86,7 +85,7 @@ modal secret create livekit-agent \
   OPENAI_API_KEY=your-openai-key
 ```
 
-> Not all examples need every key. The basic and browser agents only require
+> Not all examples need every key. The basic agent only requires
 > `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`. The avatar agent
 > also needs `OPENAI_API_KEY`.
 
@@ -140,13 +139,7 @@ LiveKit project). The deployed agent should pick up the job automatically.
 ```
 ├── shared/
 │   └── sandbox_pool.py        # Reusable pool infrastructure
-├── basic-agents/               # Original non-Modal agent scripts
-│   ├── minimal_worker.py
-│   └── browser_agent.py
 ├── modal-basic-agent/          # Minimal agent on Modal
-│   ├── agent_worker.py
-│   └── agent_pool.py
-├── modal-browser-agent/        # Browser capture agent on Modal
 │   ├── agent_worker.py
 │   └── agent_pool.py
 └── modal-avatar-agent/         # Voice agent + avatar on Modal
