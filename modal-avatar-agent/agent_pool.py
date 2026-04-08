@@ -45,7 +45,7 @@ def get_extra_sandbox_env() -> dict[str, str]:
 @app.function(image=shared_image, retries=3, region="us-east", min_containers=1)
 @modal.concurrent(max_inputs=20)
 async def add_sandbox_to_queue() -> None:
-    sandbox_app = modal.App.lookup(
+    sandbox_app = await modal.App.lookup.aio(
         f"{config.app_name}-sandboxes", create_if_missing=True
     )
 
@@ -71,7 +71,7 @@ async def add_sandbox_to_queue() -> None:
     )
 
     await asyncio.sleep(5)
-    if sb.poll() is not None:
+    if await sb.poll.aio() is not None:
         raise Exception("Agent worker sandbox failed to start")
 
     expires_at = int(time.time()) + config.sandbox_timeout_seconds
@@ -79,7 +79,7 @@ async def add_sandbox_to_queue() -> None:
     await pool_queue.put.aio(
         {"key": sandbox_key, "modal_id": sb.object_id, "expires_at": expires_at}
     )
-    sb.detach()
+    await sb.detach.aio()
 
 
 if __name__ == "__main__":

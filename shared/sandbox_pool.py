@@ -136,8 +136,8 @@ def create_pool_app(
         for entry in entries:
             try:
                 sb = modal.Sandbox.from_id(entry["modal_id"])
-                sb.terminate()
-                sb.detach()
+                await sb.terminate.aio()
+                await sb.detach.aio()
                 num_terminated += 1
             except Exception:
                 pass
@@ -170,7 +170,7 @@ def create_pool_app(
 
             try:
                 sb = modal.Sandbox.from_id(modal_id)
-                alive = sb.poll() is None
+                alive = await sb.poll.aio() is None
             except Exception:
                 alive = False
 
@@ -258,7 +258,7 @@ def create_pool_app(
 
             try:
                 sb = modal.Sandbox.from_id(modal_id)
-                alive = sb.poll() is None
+                alive = await sb.poll.aio() is None
             except Exception:
                 alive = False
 
